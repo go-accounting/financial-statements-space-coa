@@ -6,46 +6,22 @@ import (
 	financialstatementsspacecoa "github.com/go-accounting/financial-statements-space-coa"
 )
 
-var newSpace func(map[string]interface{}, *string, *string) (interface{}, error)
-var newKeyValueStore func(map[string]interface{}, *string) (interface{}, error)
-var LoadSymbolFunction func(string, string) (interface{}, error)
-var spaceSettings map[string]interface{}
-var keyValueStoreSettings map[string]interface{}
-
-func NewDataSource(settings map[string]interface{}, user *string, coaid *string) (interface{}, error) {
-	if newSpace == nil {
-		spaceSettings = map[string]interface{}{}
-		for k, v := range settings["Space"].(map[interface{}]interface{}) {
-			spaceSettings[k.(string)] = v
-		}
-		symbol, err := LoadSymbolFunction(spaceSettings["PluginFile"].(string), "NewSpace")
-		if err != nil {
-			return nil, err
-		}
-		newSpace = symbol.(func(map[string]interface{}, *string, *string) (interface{}, error))
-	}
-	if newKeyValueStore == nil {
-		keyValueStoreSettings = map[string]interface{}{}
-		for k, v := range settings["AccountsRepository"].(map[interface{}]interface{}) {
-			keyValueStoreSettings[k.(string)] = v
-		}
-		symbol, err := LoadSymbolFunction(keyValueStoreSettings["PluginFile"].(string), "NewKeyValueStore")
-		if err != nil {
-			return nil, err
-		}
-		newKeyValueStore = symbol.(func(map[string]interface{}, *string) (interface{}, error))
-	}
-	space, err := newSpace(spaceSettings, user, coaid)
+func NewFinancialStatementsDataSource(config map[string]interface{}, ss ...*string) (interface{}, error) {
+	space, err := cast(config["NewSpace"])(config, ss...)
 	if err != nil {
 		return nil, err
 	}
-	keyValueStore, err := newKeyValueStore(keyValueStoreSettings, user)
+	keyValueStore, err := cast(config["NewKeyValueStore"])(config, ss[0])
 	if err != nil {
 		return nil, err
 	}
 	return financialstatementsspacecoa.NewDataSource(
 		space.(deb.Space),
 		coa.NewCoaRepository(keyValueStore.(coa.KeyValueStore)),
-		coaid,
+		ss[1],
 	)
+}
+
+func cast(v interface{}) func(map[string]interface{}, ...*string) (interface{}, error) {
+	return v.(func(map[string]interface{}, ...*string) (interface{}, error))
 }
