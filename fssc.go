@@ -56,11 +56,24 @@ func (ds *dataSource) Transactions(accounts []string, from, to time.Time) (chan 
 		if check(err) {
 			return
 		}
+		accountsIds := make([]string, len(coaAccounts))
+		for i, a := range coaAccounts {
+			accountsIds[i] = a.Id
+		}
+		indexes, err := ds.coa.Indexes(*ds.coaid, accountsIds, nil)
+		if check(err) {
+			return
+		}
 		sch, serrch := space.Transactions()
 		for t := range sch {
 			entries := financialstatements.Entries{}
 			for k, v := range t.Entries {
-				entries[coaAccounts[k-1].Id] += v
+				for i := range indexes {
+					if k-1 == deb.Account(indexes[i]) {
+						entries[coaAccounts[i].Id] += v
+						break
+					}
+				}
 			}
 			buf := bytes.NewBuffer(t.Metadata)
 			dec := gob.NewDecoder(buf)
@@ -105,11 +118,24 @@ func (ds *dataSource) Balances(accounts []string, from, to time.Time) (financial
 	if err != nil {
 		return nil, err
 	}
+	accountsIds := make([]string, len(coaAccounts))
+	for i, a := range coaAccounts {
+		accountsIds[i] = a.Id
+	}
+	indexes, err := ds.coa.Indexes(*ds.coaid, accountsIds, nil)
+	if err != nil {
+		return nil, err
+	}
 	result := financialstatements.Entries{}
 	ch, errch := space.Transactions()
 	for t := range ch {
 		for k, v := range t.Entries {
-			result[coaAccounts[k-1].Id] += v
+			for i := range indexes {
+				if k-1 == deb.Account(indexes[i]) {
+					result[coaAccounts[i].Id] += v
+					break
+				}
+			}
 		}
 	}
 	return result, <-errch
